@@ -431,10 +431,11 @@ export class TerminalNetworkV2 implements ITerminalNetwork {
 			this.notify(msg);
 			// this.logTransfer(resourceType, amount, sender.room.name, receiver.room.name);
 		} else {
-			log.warning(`Could not send ${amount} ${resourceType} from ${sender.room.print} to ` +
-						`${receiver.room.print}! Response: ${response}`);
 			if (response == ERR_NOT_ENOUGH_RESOURCES || response == ERR_TIRED) {
 				this.terminalOverload[sender.room.name] = true;
+			} else {
+				log.warning(`Could not send ${amount} ${resourceType} from ${sender.room.print} to ` +
+							`${receiver.room.print}! Response: ${response}`);
 			}
 		}
 		return response;
@@ -550,9 +551,9 @@ export class TerminalNetworkV2 implements ITerminalNetwork {
 			this.colonyThresholds[requestor.name] = {};
 		}
 		// If you already requested the resource via a different method, throw a warning and override
-		if (this.colonyThresholds[requestor.name][resource] != undefined) {
-			log.warning(`TerminalNetwork.colonyThresholds[${requestor.name}][${resource}] already set to:` +
-						`${this.colonyThresholds[requestor.name][resource]}; overriding previous request!`);
+		if (this.colonyThresholds[requestor.name][resource] !== undefined) {
+			log.warning(`TerminalNetwork.colonyThresholds${requestor.print}[${resource}] already set to: ` +
+						`${this.colonyThresholds[requestor.name][resource].target}; overriding with ${totalAmount}!`);
 		}
 		// Set the thresholds and set state to activeRequestor
 		this.colonyThresholds[requestor.name][resource] = {
@@ -911,7 +912,7 @@ export class TerminalNetworkV2 implements ITerminalNetwork {
 	private handleProvideInstance(colony: Colony, resource: ResourceConstant, provideAmount: number,
 								  partnerSets: Colony[][], opts: ProvideOpts): boolean {
 		// Sometimes we don't necessarily want to push to other rooms - we usually do, but not always
-		if (opts.allowPushToOtherRooms) {
+		if (opts.allowPushToOtherRooms && colony.terminal!.store[resource] > this.lockedAmount(colony, resource)) {
 			// Compute the amount we want to send
 			let sendAmount = provideAmount;
 			if (colony.state.isEvacuating) {
@@ -929,7 +930,7 @@ export class TerminalNetworkV2 implements ITerminalNetwork {
 				let validPartners: Colony[] = _.filter(partners, partner =>
 					partner.assets[resource] + sendAmount <= this.thresholds(partner, resource).target &&
 					this.getRemainingSpace(partner) - sendAmount >= TerminalNetworkV2.settings.minColonySpace);
-				// If that doesn't work, tfind partner where assets + sendAmount < target + tolerance and has space
+				// If that doesn't work, find partner where assets + sendAmount < target + tolerance and has space
 				if (validPartners.length == 0) {
 					validPartners = _.filter(partners, partner =>
 						partner.assets[resource] + sendAmount <=
@@ -959,7 +960,7 @@ export class TerminalNetworkV2 implements ITerminalNetwork {
 					const recvTerm = bestPartner.terminal!;
 					sendAmount = Math.min(sendAmount,
 										  sendTerm.store[resource] - this.lockedAmount(colony, resource));
-					if (resource == RESOURCE_ENERGY) { // if we're sending energy, make sure we have amount + cost
+					if (resource === RESOURCE_ENERGY) { // if we're sending energy, make sure we have amount + cost
 						const sendCost = Game.market.calcTransactionCost(sendAmount, colony.name, bestPartner.name);
 						if (sendAmount + sendCost > sendTerm.store[resource]) {
 							sendAmount -= sendCost;
@@ -1051,7 +1052,7 @@ export class TerminalNetworkV2 implements ITerminalNetwork {
 		for (const resource of RESOURCE_EXCHANGE_ORDER) {
 			for (const colony of (providers[resource] || [])) {
 				// Skip if the terminal is not ready -  prevents trying to send twice in a single tick
-				if (colony.terminal && !colony.terminal.isReady) {
+				if (!colony.terminal || !colony.terminal.isReady) {
 					continue;
 				}
 				const provideAmount = colony.assets[resource] - this.thresholds(colony, resource).target;
