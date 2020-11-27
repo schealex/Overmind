@@ -812,14 +812,12 @@ export class TraderJoe implements ITradeNetwork {
 
 		// If you don't have a lot of credits or preferDirect==true, try to sell directly to an existing buy order
 		if (opts.preferDirect || Game.market.credits < TraderJoe.settings.market.credits.mustSellDirectBelow) {
-			if (this.getExistingOrders(ORDER_SELL, resource, terminal.room.name).length == 0) {
-				const result = this.sellDirect(terminal, resource, amount, opts);
-				if (result != ERR_NO_ORDER_TO_SELL_TO && result != ERR_SELL_DIRECT_PRICE_TOO_LOW) {
-					return result; // if there's nowhere to sensibly sell, allow creating an order
-				}
-				this.notify(`Sell direct request: ${amount} ${resource} from ${printRoomName(terminal.room.name)} ` +
-							`was unsuccessful; allowing fallthrough to TradeNetwork.maintainOrder()`);
+			const result = this.sellDirect(terminal, resource, amount, opts);
+			if (result != ERR_NO_ORDER_TO_SELL_TO && result != ERR_SELL_DIRECT_PRICE_TOO_LOW) {
+				return result; // if there's nowhere to sensibly sell, allow creating an order
 			}
+			this.notify(`Sell direct request: ${amount} ${resource} from ${printRoomName(terminal.room.name)} ` +
+						`was unsuccessful; allowing fallthrough to TradeNetwork.maintainOrder()`);
 		}
 
 		if (opts.dryRun) {
